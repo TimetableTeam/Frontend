@@ -1,5 +1,4 @@
-name: Frontend CI
-
+name: Frontend CI - Build
 on:
   push:
     branches:
