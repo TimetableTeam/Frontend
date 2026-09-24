@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-
   pull_request:
     branches:
       - main
@@ -12,11 +11,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
-  defaults:
-      run:
-        working-directory: TanseekFrontend
-   
 
     steps:
       - name: Checkout repository
@@ -32,3 +26,6 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+      - name: Build Docker Image
+        run: docker build -t tanseek-frontend:test .
