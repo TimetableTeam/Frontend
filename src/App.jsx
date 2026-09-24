@@ -19,6 +19,7 @@ import ProfileSettings from './components/ProfileSettings'
 import { allocations as initialAllocations, conflicts, slots } from './data/mockData'
 import { authApi, clearAuthSession, loadAuthSession, saveAuthSession } from './api/authApi'
 import { tanseekApi } from './api/tanseekApi'
+import { USE_MOCK_API } from './api/client'
 import { getAllowedPages, getDefaultPage, hasPermission } from './auth/permissions'
 
 const DRAFT_ID = 'draft-v3'
@@ -47,8 +48,57 @@ function cloneAllocations() {
 }
 
 function slotIdForAlternative(alternative) {
-  const start = String(alternative?.time || '').split(/[–-]/)[0].trim()
+  const start = String(alternative?.start || alternative?.time || '').split(/[–-]/)[0].trim()
   return slots.find(slot => slot.start === start)?.id || null
+}
+
+const ISO_DAY_NAMES = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday' }
+
+function frontendAlternative(item, allocationId, index) {
+  const reasons = Array.isArray(item?.reasons) ? item.reasons : []
+  return {
+    id: `live-${allocationId}-${item?.roomId || item?.room || 'room'}-${item?.weekday || 'day'}-${item?.start || index}`,
+    room: item?.room || `Room ${item?.roomId || ''}`.trim(),
+    roomId: item?.roomId ?? item?.room_id ?? null,
+    weekday: Number(item?.weekday) || null,
+    day: ISO_DAY_NAMES[Number(item?.weekday)] || String(item?.day || ''),
+    start: item?.start || null,
+    end: item?.end || null,
+    time: item?.start && item?.end ? `${item.start}–${item.end}` : String(item?.time || ''),
+    capacity: item?.capacity ?? null,
+    score: item?.score ?? null,
+    equipment: item?.equipment || '',
+    tradeoff: reasons.join(' · '),
+    reasons,
+  }
+}
+
+function backendConflictItems(validation, allocations) {
+  const allocationById = new Map((allocations || []).map(item => [String(item.id), item]))
+  return (validation?.conflicts || []).flatMap(group => {
+    const allocation = allocationById.get(String(group.allocationId))
+    const allocationLabel = [
+      allocation?.code || allocation?.course_code || allocation?.course,
+      group.sectionCode || allocation?.section,
+    ].filter(Boolean).join(' · ') || `Allocation ${group.allocationId}`
+
+    const items = Array.isArray(group.conflicts) && group.conflicts.length ? group.conflicts : [{ type: 'HARD_CONFLICT', message: 'This allocation has a blocking conflict.' }]
+    const alternatives = Array.isArray(group.alternatives)
+      ? group.alternatives.map((item, index) => frontendAlternative(item, group.allocationId, index))
+      : []
+
+    return items.map((issue, index) => ({
+      id: `backend-${group.allocationId}-${issue?.type || 'conflict'}-${index}`,
+      title: String(issue?.type || 'HARD_CONFLICT').replaceAll('_', ' '),
+      scope: group.sectionCode || allocation?.section || `Allocation ${group.allocationId}`,
+      reason: issue?.message || 'This allocation has a blocking conflict.',
+      allocationId: group.allocationId,
+      allocation: allocationLabel,
+      alternatives,
+      recommendationError: group.recommendation_error || '',
+      source: 'backend',
+    }))
+  })
 }
 
 export default function App() {
@@ -65,8 +115,14 @@ export default function App() {
   const [publishedLoading, setPublishedLoading] = useState(false)
   const [publishedError, setPublishedError] = useState('')
   const [scheduleWorkflow, setScheduleWorkflow] = useState(null)
+  const [draftValidation, setDraftValidation] = useState(null)
 
-  const conflictCount = useMemo(() => conflicts.filter(c => !resolvedIds.includes(c.id)).length, [resolvedIds])
+  const liveConflicts = useMemo(() => backendConflictItems(draftValidation, draftAllocations), [draftValidation, draftAllocations])
+  const visibleConflicts = USE_MOCK_API ? conflicts : liveConflicts
+  const conflictCount = useMemo(
+    () => USE_MOCK_API ? conflicts.filter(c => !resolvedIds.includes(c.id)).length : liveConflicts.length,
+    [resolvedIds, liveConflicts],
+  )
 
   useEffect(() => {
     if (!role) return
@@ -77,7 +133,7 @@ export default function App() {
   useEffect(() => {
     if (!session) return
     if (getAllowedPages(session.user).includes('timetable')) refreshPublishedTimetable()
-    if (!['lecturer', 'ta', 'student'].includes(session.user.role) && getAllowedPages(session.user).includes('timetable')) { refreshDraftAllocations(); refreshScheduleWorkflow() }
+    if (!['lecturer', 'ta', 'student'].includes(session.user.role) && getAllowedPages(session.user).includes('timetable')) { refreshDraftAllocations(); refreshScheduleWorkflow(); refreshDraftValidation() }
   }, [session?.user?.id])
 
   async function refreshDraftAllocations() {
@@ -102,17 +158,32 @@ export default function App() {
     }
   }
 
+  async function refreshDraftValidation() {
+    if (USE_MOCK_API) return null
+    try {
+      const payload = await tanseekApi.validateDraft(DRAFT_ID)
+      setDraftValidation(payload || null)
+      return payload
+    } catch {
+      // A published/no-draft state is valid here; there is simply nothing to validate.
+      setDraftValidation(null)
+      return null
+    }
+  }
+
   async function handleGenerate() {
     const payload = await tanseekApi.generateDraft(DRAFT_ID)
     setDraftAllocations(payload?.allocations || [])
     setScheduleWorkflow(payload?.workflow || null)
     setResolvedIds([])
     saveResolvedConflictIds([])
+    if (!USE_MOCK_API) await refreshDraftValidation()
     return payload
   }
 
   async function handleSubmitReview() {
     const validation = await tanseekApi.validateDraft(DRAFT_ID, { resolved_conflict_ids: resolvedIds })
+    if (!USE_MOCK_API) setDraftValidation(validation || null)
     if (!validation?.valid) throw new Error(`Resolve ${validation?.hard_conflict_count || conflictCount} hard conflict(s) before Admin review.`)
     const workflow = await tanseekApi.submitDraftForReview(DRAFT_ID, { resolved_conflict_ids: resolvedIds })
     setScheduleWorkflow(workflow)
@@ -171,6 +242,7 @@ export default function App() {
     const created = await tanseekApi.createDraftAllocation(DRAFT_ID, payload)
     setDraftAllocations(current => [...current, created])
     await refreshScheduleWorkflow()
+    if (!USE_MOCK_API) await refreshDraftValidation()
     return created
   }
 
@@ -178,28 +250,45 @@ export default function App() {
     const updated = await tanseekApi.updateDraftAllocation(DRAFT_ID, allocationId, payload)
     setDraftAllocations(current => current.map(item => String(item.id) === String(allocationId) ? updated : item))
     await refreshScheduleWorkflow()
+    if (!USE_MOCK_API) await refreshDraftValidation()
     return updated
   }
 
   async function handleResolve(conflictId, alternativeId) {
-    const conflict = conflicts.find(item => item.id === conflictId)
+    const sourceConflicts = USE_MOCK_API ? conflicts : liveConflicts
+    const conflict = sourceConflicts.find(item => item.id === conflictId)
     const alternative = conflict?.alternatives?.find(item => item.id === alternativeId)
 
-    if (conflict && alternative) {
-      const nextSlot = slotIdForAlternative(alternative)
-      const existing = draftAllocations.find(allocation => allocation.id === conflict.allocationId)
-      if (existing) {
-        const updatedAllocation = {
-          ...existing,
-          room: alternative.room,
-          day: alternative.day,
-          slot: nextSlot || existing.slot,
-          status: 'ok',
-        }
-        const savedAllocation = await tanseekApi.updateDraftAllocation(DRAFT_ID, updatedAllocation.id, updatedAllocation)
-        setDraftAllocations(current => current.map(allocation => allocation.id === conflict.allocationId ? savedAllocation : allocation))
+    if (!conflict || !alternative) throw new Error('The selected alternative is no longer available.')
+
+    const existing = draftAllocations.find(allocation => String(allocation.id) === String(conflict.allocationId))
+    if (!existing) throw new Error('The affected allocation could not be found.')
+
+    if (!USE_MOCK_API) {
+      if (!alternative.roomId || !alternative.weekday || !alternative.start) {
+        throw new Error('This recommendation is missing the room or time details needed to apply it.')
       }
+      const savedAllocation = await tanseekApi.updateDraftAllocation(DRAFT_ID, existing.id, {
+        roomId: alternative.roomId,
+        weekday: alternative.weekday,
+        start: alternative.start,
+      })
+      setDraftAllocations(current => current.map(allocation => String(allocation.id) === String(existing.id) ? savedAllocation : allocation))
+      await refreshScheduleWorkflow()
+      await refreshDraftValidation()
+      return savedAllocation
     }
+
+    const nextSlot = slotIdForAlternative(alternative)
+    const updatedAllocation = {
+      ...existing,
+      room: alternative.room,
+      day: alternative.day,
+      slot: nextSlot || existing.slot,
+      status: 'ok',
+    }
+    const savedAllocation = await tanseekApi.updateDraftAllocation(DRAFT_ID, updatedAllocation.id, updatedAllocation)
+    setDraftAllocations(current => current.map(allocation => String(allocation.id) === String(existing.id) ? savedAllocation : allocation))
 
     setResolvedIds(current => {
       const next = current.includes(conflictId) ? current : [...current, conflictId]
@@ -207,12 +296,14 @@ export default function App() {
       return next
     })
     await refreshScheduleWorkflow()
+    return savedAllocation
   }
 
   async function handlePublish() {
     const validation = await tanseekApi.validateDraft(DRAFT_ID, {
       resolved_conflict_ids: resolvedIds,
     })
+    if (!USE_MOCK_API) setDraftValidation(validation || null)
 
     if (!validation?.valid) {
       throw new Error(`Publication blocked: ${validation?.hard_conflict_count || conflictCount} hard conflict${(validation?.hard_conflict_count || conflictCount) === 1 ? '' : 's'} must be resolved first.`)
@@ -263,7 +354,7 @@ export default function App() {
     requirements: <CoordinatorRequirements currentUser={session.user} />,
     availability: <StaffAvailability />,
     labchecks: <LabManagerChecks />,
-    conflicts: <ConflictResolution conflicts={conflicts} resolvedIds={resolvedIds} onResolve={handleResolve} readOnly={!hasPermission(session.user, 'conflicts.manage')} />,
+    conflicts: <ConflictResolution conflicts={visibleConflicts} resolvedIds={USE_MOCK_API ? resolvedIds : []} onResolve={handleResolve} readOnly={!hasPermission(session.user, 'conflicts.manage')} />,
     terms: <MasterData allowedTabs={['terms', 'slots']} initialTab="terms" currentUser={session.user} />,
     departments: <DepartmentManagement />,
     courses: <MasterData allowedTabs={['courses']} initialTab="courses" currentUser={session.user} />,

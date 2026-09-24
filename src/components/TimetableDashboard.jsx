@@ -38,6 +38,11 @@ function uniqueValues(values) {
   return [...new Set(values.filter(Boolean).map(value => String(value)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
 }
 
+function csvCell(value) {
+  const text = String(value ?? '')
+  return `"${text.replace(/"/g, '""')}"`
+}
+
 function PublishedState({ type, message, onRetry }) {
   const { t } = useLanguage()
 
@@ -254,6 +259,26 @@ export default function TimetableDashboard({
     setFilters({ level: 'All', section: 'All', lecturer: 'All', room: 'All', day: 'All' })
   }
 
+  function exportTimetable() {
+    const slotMap = new Map(slots.map(slot => [slot.id, slot]))
+    const headers = [t('Course code'), t('Course'), t('Section'), t('Component'), t('Instructor'), t('Room'), t('Day'), t('Start'), t('End'), t('Level')]
+    const rows = visible.map(item => {
+      const slot = slotMap.get(item.slot)
+      return [item.code, item.course, item.section, t(item.type || ''), item.staff, item.room, t(item.day || ''), slot?.start || item.start || '', slot?.end || item.end || '', allocationLevel(item)]
+    })
+    const csv = '\uFEFF' + [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const termName = String(publishedVersion?.term_name || 'current-term').replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()
+    link.href = url
+    link.download = `tanseek-timetable-${termName || 'current-term'}.csv`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
   const headerEyebrow = publishedOnly
     ? publishedVersion ? `${publishedVersion.term_name || 'Fall 2026'} · ${t('Published')} v${publishedVersion.version_number}` : `Fall 2026 · ${t('Published timetable')}`
     : 'Fall 2026 · Draft v3'
@@ -320,12 +345,15 @@ export default function TimetableDashboard({
         eyebrow={headerEyebrow}
         title={title}
         description={description}
-        actions={!publishedOnly && <>
-          {canGenerate && <Button variant="secondary" icon="calendar" onClick={runGenerate} disabled={workflowBusy}>{t('Generate draft')}</Button>}
-          {canManageDraft && <Button variant="secondary" icon="plus" onClick={() => setAddOpen(true)}>{t('Add session')}</Button>}
-          <Button variant="secondary" icon="filter" onClick={() => setFiltersOpen(prev => !prev)}>{t('Filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</Button>
-          {canSubmitReview && workflow?.status !== 'READY_FOR_REVIEW' && workflow?.status !== 'PUBLISHED' && <Button onClick={submitReview} disabled={workflowBusy} title={conflictCount > 0 ? t('Click to see why review submission is blocked.') : undefined}>{t('Submit for Admin review')}</Button>}
-          {canPublish && <Button onClick={openPublish} title={!['READY_FOR_REVIEW','UNDER_REVIEW','APPROVED'].includes(workflow?.status) ? t('Click to see what is required before publishing.') : undefined}>{t('Publish version')}</Button>}
+        actions={<>
+          <Button variant="secondary" icon="download" onClick={exportTimetable} disabled={visible.length === 0}>{t('Export CSV')}</Button>
+          {!publishedOnly && <>
+            {canGenerate && <Button variant="secondary" icon="calendar" onClick={runGenerate} disabled={workflowBusy}>{t('Generate draft')}</Button>}
+            {canManageDraft && <Button variant="secondary" icon="plus" onClick={() => setAddOpen(true)}>{t('Add session')}</Button>}
+            <Button variant="secondary" icon="filter" onClick={() => setFiltersOpen(prev => !prev)}>{t('Filters')}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</Button>
+            {canSubmitReview && workflow?.status !== 'READY_FOR_REVIEW' && workflow?.status !== 'PUBLISHED' && <Button onClick={submitReview} disabled={workflowBusy} title={conflictCount > 0 ? t('Click to see why review submission is blocked.') : undefined}>{t('Submit for Admin review')}</Button>}
+            {canPublish && <Button onClick={openPublish} title={!['READY_FOR_REVIEW','UNDER_REVIEW','APPROVED'].includes(workflow?.status) ? t('Click to see what is required before publishing.') : undefined}>{t('Publish version')}</Button>}
+          </>}
         </>}
       />
 

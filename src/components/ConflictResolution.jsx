@@ -11,6 +11,7 @@ export default function ConflictResolution({ conflicts, resolvedIds, onResolve, 
   const [applying, setApplying] = useState(false)
   const [actionError, setActionError] = useState('')
   const conflict = unresolved.find(c => c.id === selectedId) || unresolved[0]
+  const alternatives = Array.isArray(conflict?.alternatives) ? conflict.alternatives : []
   const { t } = useLanguage()
 
   async function applySelected() {
@@ -54,10 +55,17 @@ export default function ConflictResolution({ conflicts, resolvedIds, onResolve, 
           <Card className="overflow-hidden">
             <div className="border-b border-tanseek-line p-5 md:px-6"><h2 className="text-lg font-bold text-tanseek-navy">{t('Suggested spaces & slots')}</h2><p className="mt-1 text-sm text-tanseek-muted">{t('Feasible alternatives ranked by room suitability, equipment, availability and scheduling preferences.')}</p></div>
             <div className="divide-y divide-tanseek-line">
-              {conflict.alternatives.map((a, index) => {
+              {alternatives.length === 0 ? (
+                <div className="p-5 md:p-6">
+                  <div className="rounded-brand-sm border border-tanseek-line bg-tanseek-canvas/60 p-4">
+                    <p className="text-sm font-bold text-tanseek-navy">{t('No automatic alternative is available for this live conflict.')}</p>
+                    <p className="mt-1 text-xs leading-5 text-tanseek-muted">{conflict.recommendationError || t('No feasible room/time combination was found under the current capacity, equipment, availability and conflict rules. You can edit the allocation manually and validation will run again.')}</p>
+                  </div>
+                </div>
+              ) : alternatives.map((a, index) => {
                 const selected = selectedAlternative === a.id
                 return <button key={a.id} onClick={()=>setSelectedAlternative(a.id)} className={`flex w-full flex-col gap-4 p-5 text-left transition md:flex-row md:items-center ${selected ? 'bg-tanseek-tealSoft/70' : 'hover:bg-tanseek-canvas/80'}`}>
-                  <div className="flex flex-1 items-start gap-4"><div className={`grid h-9 w-9 shrink-0 place-items-center rounded-brand-sm text-sm font-bold ${index===0?'bg-tanseek-teal text-tanseek-navy':'bg-tanseek-navySoft text-tanseek-navy'}`}>{index+1}</div><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-bold text-tanseek-navy">{a.room}</h3>{index===0 && <StatusBadge status="available">{t('Recommended')}</StatusBadge>}</div><p className="mt-1 text-sm text-tanseek-muted">{t(a.day)} · {a.time} · {a.capacity} {t('seats')}</p><p className="mt-2 text-xs leading-5 text-tanseek-muted">{t(a.equipment)} · {t(a.tradeoff)}</p></div></div>
+                  <div className="flex flex-1 items-start gap-4"><div className={`grid h-9 w-9 shrink-0 place-items-center rounded-brand-sm text-sm font-bold ${index===0?'bg-tanseek-teal text-tanseek-navy':'bg-tanseek-navySoft text-tanseek-navy'}`}>{index+1}</div><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-bold text-tanseek-navy">{a.room}</h3>{index===0 && <StatusBadge status="available">{t('Recommended')}</StatusBadge>}</div><p className="mt-1 text-sm text-tanseek-muted">{t(a.day)} · {a.time}{a.capacity ? ` · ${a.capacity} ${t('seats')}` : ''}{a.score != null ? ` · ${a.score}%` : ''}</p><p className="mt-2 text-xs leading-5 text-tanseek-muted">{[a.equipment, a.tradeoff].filter(Boolean).map(value => t(value)).join(' · ')}</p></div></div>
                   <div className="flex items-center gap-4 md:justify-end"><div className={`grid h-9 w-9 place-items-center rounded-full border ${selected?'border-tanseek-teal bg-tanseek-teal text-tanseek-navy':'border-tanseek-line bg-white text-transparent'}`}><Icon name="check" size={17}/></div></div>
                 </button>
               })}

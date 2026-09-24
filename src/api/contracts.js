@@ -11,6 +11,7 @@ export const API_CONTRACTS = {
   departmentById: (id) => `/departments/${id}`,
   masterData: (type) => `/master-data/${type}`,
   masterDataRecord: (type, id) => `/master-data/${type}/${id}`,
+  endAcademicTerm: (id) => `/master-data/terms/${id}/end`,
   requirements: '/requirements',
   requirementById: (id) => `/requirements/${id}`,
   instructorAssignments: '/instructor-assignments',

@@ -16,7 +16,6 @@ const emptyByTab = {
   terms: {
     name: '',
     start: '',
-    end: '',
     availability_deadline: '',
     holidays_text: '',
     status: 'Draft',
@@ -54,6 +53,7 @@ export default function MasterData({
   const [form, setForm] = useState({ ...emptyByTab[firstTab] })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [endingTermId, setEndingTermId] = useState(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
@@ -117,10 +117,9 @@ export default function MasterData({
       setForm({
         name: row.name || '',
         start: row.start || '',
-        end: row.end || '',
-        availability_deadline: row.availability_deadline || '',
+        availability_deadline: row.availability_deadline || row.availabilityDeadline || '',
         holidays_text: Array.isArray(row.holidays) ? row.holidays.join('\n') : '',
-        status: row.status || 'Draft',
+        status: String(row.status || '').toLowerCase() === 'active' ? 'Active' : 'Draft',
       })
     }
     if (tab === 'courses') setForm({ code: row.code || '', name: row.name || '', department: row.department || departmentScope || '', contact_hours: row.contact_hours ?? row.hours ?? 3 })
@@ -160,6 +159,23 @@ export default function MasterData({
       setError(e2.message || t('Could not save this record.'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function endTerm(row) {
+    const confirmed = window.confirm(t('End this term today? The end date will be set automatically and the term will be archived.'))
+    if (!confirmed) return
+    setEndingTermId(row.id)
+    setError('')
+    setMessage('')
+    try {
+      await tanseekApi.endAcademicTerm(row.id)
+      setMessage(t('Term ended successfully.'))
+      await load()
+    } catch (e) {
+      setError(e.message || t('Could not end this term.'))
+    } finally {
+      setEndingTermId(null)
     }
   }
 
@@ -269,7 +285,7 @@ export default function MasterData({
               {loading && <div className="p-6 text-sm text-tanseek-muted">{t('Loading master data…')}</div>}
 
               {!loading && tab === 'terms' && (
-                <table className="min-w-[900px] w-full text-left"><thead className="bg-tanseek-canvas text-[11px] uppercase tracking-[.08em] text-tanseek-muted"><tr><th className="px-5 py-3">{t('Term')}</th><th className="px-5 py-3">{t('Start')}</th><th className="px-5 py-3">{t('End')}</th><th className="px-5 py-3">{t('Availability deadline')}</th><th className="px-5 py-3">{t('Status')}</th><th className="px-5 py-3"></th></tr></thead><tbody className="divide-y divide-tanseek-line">{filteredRows.map(r=><tr key={r.id}><td className="px-5 py-4 text-sm font-bold text-tanseek-navy">{r.name}</td><td className="px-5 py-4 text-sm text-tanseek-muted">{r.start}</td><td className="px-5 py-4 text-sm text-tanseek-muted">{r.end}</td><td className="px-5 py-4 text-sm text-tanseek-muted">{r.availability_deadline || '—'}</td><td className="px-5 py-4"><StatusBadge status={String(r.status).toLowerCase()}>{t(r.status)}</StatusBadge></td><td className="px-5 py-4"><button onClick={()=>openEdit(r)} className="text-tanseek-muted hover:text-tanseek-navy"><Icon name="edit" size={17}/></button></td></tr>)}</tbody></table>
+                <table className="min-w-[980px] w-full text-left"><thead className="bg-tanseek-canvas text-[11px] uppercase tracking-[.08em] text-tanseek-muted"><tr><th className="px-5 py-3">{t('Term')}</th><th className="px-5 py-3">{t('Start')}</th><th className="px-5 py-3">{t('End')}</th><th className="px-5 py-3">{t('Availability deadline')}</th><th className="px-5 py-3">{t('Status')}</th><th className="px-5 py-3"></th></tr></thead><tbody className="divide-y divide-tanseek-line">{filteredRows.map(r=>{ const active=String(r.status||'').toLowerCase()==='active'; const ended=String(r.status||'').toLowerCase()==='ended'; return <tr key={r.id}><td className="px-5 py-4 text-sm font-bold text-tanseek-navy">{r.name}</td><td className="px-5 py-4 text-sm text-tanseek-muted">{r.start}</td><td className="px-5 py-4 text-sm text-tanseek-muted">{r.end || (active ? t('Not ended yet') : '—')}</td><td className="px-5 py-4 text-sm text-tanseek-muted">{r.availability_deadline || r.availabilityDeadline || '—'}</td><td className="px-5 py-4"><StatusBadge status={String(r.status).toLowerCase()}>{t(r.status)}</StatusBadge></td><td className="px-5 py-4"><div className="flex items-center justify-end gap-3">{active && <button type="button" disabled={endingTermId===r.id} onClick={()=>endTerm(r)} className="rounded-brand-sm border border-tanseek-alert/25 bg-tanseek-alertSoft px-3 py-2 text-xs font-bold text-tanseek-alert hover:opacity-80 disabled:cursor-wait disabled:opacity-60">{endingTermId===r.id ? t('Ending…') : t('End term')}</button>}{!ended && <button type="button" onClick={()=>openEdit(r)} className="text-tanseek-muted hover:text-tanseek-navy"><Icon name="edit" size={17}/></button>}</div></td></tr>})}</tbody></table>
               )}
 
               {!loading && tab === 'slots' && (
@@ -299,7 +315,6 @@ export default function MasterData({
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <Field label={t('Term name')} className="sm:col-span-2"><input required value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm" placeholder="Fall 2027"/></Field>
                 <Field label={t('Start date')}><input required type="date" value={form.start} onChange={e=>setForm(p=>({...p,start:e.target.value}))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm"/></Field>
-                <Field label={t('End date')}><input required type="date" value={form.end} onChange={e=>setForm(p=>({...p,end:e.target.value}))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm"/></Field>
                 <Field label={t('Availability deadline')} hint={t('Doctors and TAs should confirm availability before this date.')}><input type="date" value={form.availability_deadline} onChange={e=>setForm(p=>({...p,availability_deadline:e.target.value}))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm"/></Field>
                 <Field label={t('Status')}><select value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value}))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm"><option value="Draft">{t('Draft')}</option><option value="Active">{t('Active')}</option></select></Field>
                 <Field className="sm:col-span-2" label={t('Holidays')} hint={t('Enter one holiday date per line or separate dates with commas.')}><textarea rows="4" value={form.holidays_text} onChange={e=>setForm(p=>({...p,holidays_text:e.target.value}))} placeholder={'2027-10-06\n2027-12-25'} className="w-full rounded-brand-sm border border-tanseek-line bg-white px-3 py-2 text-sm"/></Field>

@@ -73,8 +73,8 @@ export const conflicts = [
 
 export const masterData = {
   terms: [
-    { id: 't1', name: 'Fall 2026', start: '2026-09-05', end: '2027-01-20', availability_deadline: '2026-08-31', holidays: ['2026-10-06'], status: 'Active' },
-    { id: 't2', name: 'Spring 2027', start: '2027-02-06', end: '2027-06-16', availability_deadline: '2027-01-31', holidays: [], status: 'Draft' },
+    { id: 't1', name: 'Fall 2026', start: '2026-09-05', end: null, availability_deadline: '2026-08-31', holidays: ['2026-10-06'], status: 'Active' },
+    { id: 't2', name: 'Spring 2027', start: '2027-02-06', end: null, availability_deadline: '2027-01-31', holidays: [], status: 'Draft' },
   ],
   courses: [
     { id: 'DS301', name: 'Machine Learning', department: 'Data Science', hours: 3 },

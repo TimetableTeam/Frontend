@@ -62,7 +62,7 @@ let departmentRecords = readStoredArray(DEPARTMENTS_KEY, [
   { id: 2, code: 'DS', name: 'Data Science', active: true },
   { id: 3, code: 'AI', name: 'Artificial Intelligence', active: true },
 ])
-let termRecords = readStoredArray(TERMS_KEY, initialMasterData.terms)
+let termRecords = readStoredArray(TERMS_KEY, initialMasterData.terms).map(item => String(item.status || '').toLowerCase() === 'ended' ? item : { ...item, end: null })
 let courseRecords = readStoredArray(COURSES_KEY, planningCatalogs.courses.map((course, index) => ({
   ...course,
   contact_hours: course.contact_hours ?? initialMasterData.courses.find(item => item.id === course.code)?.hours ?? 3,
@@ -413,8 +413,7 @@ function nextSectionId() {
 
 function validateMasterRecord(type, body) {
   if (type === 'terms') {
-    if (!String(body?.name || '').trim() || !body?.start || !body?.end) throw new Error('Term name, start date and end date are required.')
-    if (String(body.start) >= String(body.end)) throw new Error('Term end date must be after the start date.')
+    if (!String(body?.name || '').trim() || !body?.start) throw new Error('Term name and start date are required.')
     if (body?.availability_deadline && String(body.availability_deadline) >= String(body.start)) throw new Error('Availability deadline must be before the term start date.')
   }
   if (type === 'courses') {
@@ -890,7 +889,7 @@ export async function handleMockRequest(path, options = {}) {
       validateMasterRecord(type, body)
       let record
       if (type === 'terms') {
-        record = { ...body, id: `t${nextNumericId(termRecords.map((item, i) => ({ id: Number(String(item.id).replace(/\D/g, '')) || i + 1 })))}` }
+        record = { ...body, end: null, id: `t${nextNumericId(termRecords.map((item, i) => ({ id: Number(String(item.id).replace(/\D/g, '')) || i + 1 })))}` }
         if (String(record.status).toLowerCase() === 'active') termRecords = termRecords.map(item => ({ ...item, status: 'Draft' }))
         termRecords = [...termRecords, record]
         writeStoredArray(TERMS_KEY, termRecords)
@@ -921,6 +920,22 @@ export async function handleMockRequest(path, options = {}) {
     }
   }
 
+  const endTermMatch = path.match(/^\/master-data\/terms\/([^/]+)\/end$/)
+  if (endTermMatch && method === 'POST') {
+    requireRoles(options, ['super_admin'], 'Only Super Admin can end an Academic Term.')
+    const id = endTermMatch[1]
+    const existing = termRecords.find(item => String(item.id) === String(id))
+    if (!existing) throw new Error('Term not found.')
+    if (String(existing.status || '').toLowerCase() !== 'active') throw new Error('Only the active term can be ended.')
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+    if (String(existing.start) > today) throw new Error('A term cannot end before its start date.')
+    const record = { ...existing, end: today, status: 'Ended' }
+    termRecords = termRecords.map(item => String(item.id) === String(id) ? record : item)
+    writeStoredArray(TERMS_KEY, termRecords)
+    recordActivity(options, 'Academic term ended', `${existing.name} ended on ${today}.`, 'system')
+    return jsonClone(record)
+  }
+
   const masterRecordMatch = path.match(/^\/master-data\/(terms|courses|sections)\/([^/]+)$/)
   if (masterRecordMatch && method === 'PUT') {
     const type = masterRecordMatch[1]
@@ -933,7 +948,7 @@ export async function handleMockRequest(path, options = {}) {
     if (type === 'terms') {
       const existing = termRecords.find(item => String(item.id) === String(id))
       if (!existing) throw new Error('Term not found.')
-      record = { ...existing, ...body, id: existing.id }
+      record = { ...existing, ...body, end: null, id: existing.id }
       if (String(record.status).toLowerCase() === 'active') termRecords = termRecords.map(item => ({ ...item, status: String(item.id) === String(id) ? item.status : 'Draft' }))
       termRecords = termRecords.map(item => String(item.id) === String(id) ? record : item)
       writeStoredArray(TERMS_KEY, termRecords)

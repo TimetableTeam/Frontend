@@ -26,6 +26,7 @@ export const tanseekApi = {
   createMasterData: (type, payload) => apiRequest(API_CONTRACTS.masterData(type), { method: 'POST', body: JSON.stringify(payload) }),
   updateMasterData: (type, id, payload) => apiRequest(API_CONTRACTS.masterDataRecord(type, id), { method: 'PUT', body: JSON.stringify(payload) }),
   deleteMasterData: (type, id) => apiRequest(API_CONTRACTS.masterDataRecord(type, id), { method: 'DELETE' }),
+  endAcademicTerm: (id) => apiRequest(API_CONTRACTS.endAcademicTerm(id), { method: 'POST', body: JSON.stringify({}) }),
 
   getRequirements: () => apiRequest(API_CONTRACTS.requirements),
   createRequirement: (payload) => apiRequest(API_CONTRACTS.requirements, { method: 'POST', body: JSON.stringify(payload) }),

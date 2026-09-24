@@ -9,8 +9,8 @@ import { useTheme } from '../theme/ThemeContext'
 
 export default function LoginScreen({ onLogin }) {
   const [mode, setMode] = useState('login')
-  const [email, setEmail] = useState('scheduler@tanseek.test')
-  const [password, setPassword] = useState(MOCK_PASSWORD)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [resetEmail, setResetEmail] = useState('')
   const [challengeId, setChallengeId] = useState('')
   const [resetCode, setResetCode] = useState('')
