@@ -24,6 +24,62 @@ function relativeTime(iso, language) {
   return `${days} day${days === 1 ? '' : 's'} ago`
 }
 
+function humanizeAction(value) {
+  return String(value || 'Activity')
+    .toLowerCase()
+    .split('_')
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+function normalizeOverviewPayload(payload) {
+  if (!payload || typeof payload !== 'object') return payload
+  if (Array.isArray(payload.metrics) || Array.isArray(payload.recent_activity) || payload.readiness || payload.summary) return payload
+
+  const role = String(payload.role || '').toLowerCase()
+  const isSuperAdmin = role === 'super_admin'
+  const metrics = isSuperAdmin
+    ? [
+        { label: 'Active accounts', value: String(payload.activeAccounts ?? 0), helper: 'Enabled university accounts', icon: 'user', tone: 'navy' },
+        { label: 'Departments', value: String(payload.departments ?? 0), helper: 'Academic departments', icon: 'room', tone: 'teal' },
+        { label: 'Rooms & labs', value: String(payload.rooms ?? 0), helper: `${payload.labs ?? 0} labs · ${payload.availableLabs ?? 0} available`, icon: 'grid', tone: 'navy' },
+        { label: 'Published sessions', value: String(payload.publishedSessions ?? 0), helper: 'Sessions in the current published version', icon: 'calendar', tone: 'teal' },
+      ]
+    : [
+        { label: 'Draft versions', value: String(payload.draftVersions ?? 0), helper: 'Draft schedule versions in the current term', icon: 'edit', tone: 'navy' },
+        { label: 'Published versions', value: String(payload.publishedVersions ?? 0), helper: 'Official published versions', icon: 'check', tone: 'teal' },
+        { label: 'Published sessions', value: String(payload.publishedSessions ?? 0), helper: 'Sessions in the official timetable', icon: 'calendar', tone: 'navy' },
+        { label: 'Hard conflicts', value: '0', helper: 'Current blocking conflicts', icon: 'alert', tone: 'teal' },
+      ]
+
+  const summary = [
+    ['Current term', payload.currentTerm?.name || 'No active term'],
+    ['Term status', payload.currentTerm?.status || '—'],
+    ['Rooms available', `${payload.availableLabs ?? 0} labs available`],
+  ]
+
+  const recent_activity = (Array.isArray(payload.recentActivity) ? payload.recentActivity : []).map(item => ({
+    id: item.id,
+    title: humanizeAction(item.action),
+    detail: [item.entity_type, item.entity_id ? `#${item.entity_id}` : '', item.outcome].filter(Boolean).join(' · '),
+    actor: item.actor || item.actor_name || item.actor_email || '',
+    at: item.at || item.occurred_at || null,
+  }))
+
+  return {
+    ...payload,
+    kind: isSuperAdmin ? 'system' : 'planning',
+    eyebrow: isSuperAdmin ? 'System overview' : 'Planning summary',
+    description: isSuperAdmin
+      ? 'A live university-wide view of accounts, departments, rooms and published scheduling activity.'
+      : 'A quick view of schedule readiness, room utilization and items that need action before publication.',
+    metrics,
+    summary,
+    recent_activity,
+  }
+}
+
 function LoadingOverview({ text }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -50,7 +106,7 @@ export default function Overview({ conflictCount = 0, currentUser }) {
     setError('')
     try {
       const payload = await tanseekApi.getOverview()
-      setData(payload)
+      setData(normalizeOverviewPayload(payload))
     } catch (err) {
       setError(err?.message || 'Could not load overview data.')
     } finally {

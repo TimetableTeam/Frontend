@@ -7,7 +7,7 @@ import { useLanguage } from '../i18n/LanguageContext'
 import ThemeToggle from './ThemeToggle'
 import { useTheme } from '../theme/ThemeContext'
 
-export default function LoginScreen({ onLogin }) {
+export default function LoginScreen({ onLogin, sessionNotice = '' }) {
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -163,7 +163,7 @@ export default function LoginScreen({ onLogin }) {
             <h2 className="text-2xl font-bold tracking-tight text-tanseek-navy">{t(title)}</h2>
             <p className="mt-2 text-sm leading-6 text-tanseek-muted">{t(subtitle)}</p>
 
-            {notice && (
+            {(notice || (mode === 'login' ? sessionNotice : '')) && (
               <div role="status" className="mt-5 rounded-brand-sm border border-tanseek-teal/30 bg-tanseek-teal/5 px-4 py-3 text-sm text-tanseek-navy">
                 {t(notice)}
               </div>

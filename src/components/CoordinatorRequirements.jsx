@@ -30,6 +30,8 @@ export default function CoordinatorRequirements({ currentUser }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [newEquipmentName, setNewEquipmentName] = useState('')
+  const [addingEquipment, setAddingEquipment] = useState(false)
   const formRef = useRef(null)
   const courseFieldRef = useRef(null)
   const { t } = useLanguage()
@@ -57,7 +59,7 @@ export default function CoordinatorRequirements({ currentUser }) {
   }), [items, catalog, currentUser?.department_id, currentUser?.department_name, isSuperAdmin])
   const selected = useMemo(() => visibleItems.find(item => Number(item.id) === Number(selectedId)), [visibleItems, selectedId])
   const nameOfCourse = id => catalog?.courses.find(c => Number(c.id) === Number(id))
-  const equipmentLabel = id => catalog?.equipment.find(e => e.id === id)?.label || id
+  const equipmentLabel = id => catalog?.equipment.find(e => Number(e.id) === Number(id))?.label || id
 
   function scrollToEditor() {
     requestAnimationFrame(() => {
@@ -88,6 +90,28 @@ export default function CoordinatorRequirements({ currentUser }) {
 
   function toggleArray(key, value) {
     setForm(prev => ({ ...prev, [key]: prev[key].includes(value) ? prev[key].filter(item => item !== value) : [...prev[key], value] }))
+  }
+
+  async function addEquipment() {
+    const name = newEquipmentName.trim()
+    if (!name) return
+    setAddingEquipment(true); setError(''); setMessage('')
+    try {
+      const item = await tanseekApi.createEquipment({ name })
+      const equipmentId = Number(item.id)
+      setCatalog(prev => ({
+        ...prev,
+        equipment: [...(prev?.equipment || []).filter(eq => Number(eq.id) !== equipmentId), { id: equipmentId, name: item.name, label: item.label || item.name }]
+          .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+      }))
+      setForm(prev => ({ ...prev, required_equipment: prev.required_equipment.includes(equipmentId) ? prev.required_equipment : [...prev.required_equipment, equipmentId] }))
+      setNewEquipmentName('')
+      setMessage(t(item.created === false ? 'Equipment already exists and was selected.' : 'Equipment added and selected.'))
+    } catch (e) {
+      setError(e.message || t('Could not add equipment.'))
+    } finally {
+      setAddingEquipment(false)
+    }
   }
 
   function addPreferredWindow() {
@@ -160,7 +184,33 @@ export default function CoordinatorRequirements({ currentUser }) {
 
             <div className="mt-6 grid gap-5 border-t border-tanseek-line pt-6 md:grid-cols-2"><Field label={t('Required room type')}><select value={form.required_room_type} onChange={e => setForm(p => ({ ...p, required_room_type: e.target.value }))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm"><option value="">{t('Any suitable space')}</option>{catalog?.roomTypes.map(v => <option key={v} value={v}>{t(v)}</option>)}</select></Field><Field label={t('Notes')}><input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} className="h-11 w-full rounded-brand-sm border border-tanseek-line px-3 text-sm" placeholder={t('Special setup or constraint')} /></Field></div>
 
-            <div className="mt-6"><h3 className="text-sm font-bold text-tanseek-navy">{t('Required equipment')}</h3><div className="mt-3 flex flex-wrap gap-2">{catalog?.equipment.map(eq => <button type="button" key={eq.id} onClick={() => toggleArray('required_equipment', eq.id)} className={`rounded-brand-sm border px-3 py-2 text-xs font-bold ${form.required_equipment.includes(eq.id) ? 'border-tanseek-teal bg-tanseek-tealSoft text-tanseek-navy' : 'border-tanseek-line bg-white text-tanseek-muted'}`}>{form.required_equipment.includes(eq.id) && <span className="mr-1">✓</span>}{eq.label}</button>)}</div></div>
+            <div className="mt-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-tanseek-navy">{t('Required equipment')}</h3>
+                  <p className="mt-1 text-xs text-tanseek-muted">{t('Select existing equipment or add a new requirement item for your department.')}</p>
+                </div>
+                <div className="flex w-full gap-2 sm:w-auto">
+                  <input
+                    value={newEquipmentName}
+                    onChange={e => setNewEquipmentName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addEquipment() } }}
+                    placeholder={t('e.g. Smart board')}
+                    className="h-10 min-w-0 flex-1 rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm sm:w-52"
+                  />
+                  <Button type="button" variant="secondary" icon="plus" onClick={addEquipment} disabled={addingEquipment || !newEquipmentName.trim()}>
+                    {addingEquipment ? t('Adding…') : t('Add equipment')}
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(catalog?.equipment || []).map(eq => {
+                  const id = Number(eq.id)
+                  const selectedEquipment = form.required_equipment.map(Number).includes(id)
+                  return <button type="button" key={eq.id} onClick={() => toggleArray('required_equipment', id)} className={`rounded-brand-sm border px-3 py-2 text-xs font-bold ${selectedEquipment ? 'border-tanseek-teal bg-tanseek-tealSoft text-tanseek-navy' : 'border-tanseek-line bg-white text-tanseek-muted'}`}>{selectedEquipment && <span className="mr-1">✓</span>}{eq.label}</button>
+                })}
+              </div>
+            </div>
 
             <div className="mt-6 border-t border-tanseek-line pt-6"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-bold text-tanseek-navy">{t('Preferred windows')}</h3><p className="mt-1 text-xs text-tanseek-muted">{t('Soft preferences only; hard availability rules are provided by Lecturer / TA.')}</p></div><Button type="button" variant="secondary" icon="plus" onClick={addPreferredWindow}>{t('Add window')}</Button></div><div className="mt-3 space-y-2">{form.preferred_windows.length === 0 && <div className="rounded-brand-sm border border-dashed border-tanseek-line p-4 text-xs text-tanseek-muted">{t('No preferred windows yet.')}</div>}{form.preferred_windows.map((w, i) => <div key={`${w.day}-${w.slot_id}-${i}`} className="grid gap-2 rounded-brand-sm border border-tanseek-line bg-tanseek-canvas p-3 sm:grid-cols-[1fr_1fr_auto]"><select value={w.day} onChange={e => updateWindow(i, { day: e.target.value })} className="h-10 rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm">{catalog?.days.map(d => <option key={d} value={d}>{t(d)}</option>)}</select><select value={w.slot_id} onChange={e => updateWindow(i, { slot_id: e.target.value })} className="h-10 rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm">{catalog?.slots.map(s => <option key={s.id} value={s.id}>{s.start}–{s.end}</option>)}</select><button type="button" onClick={() => setForm(p => ({ ...p, preferred_windows: p.preferred_windows.filter((_, idx) => idx !== i) }))} className="grid h-10 w-10 place-items-center rounded-brand-sm border border-tanseek-line bg-white text-tanseek-muted hover:text-tanseek-alert"><Icon name="x" size={17}/></button></div>)}</div></div>
 

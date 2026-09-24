@@ -31,6 +31,7 @@ export const tanseekApi = {
   getRequirements: () => apiRequest(API_CONTRACTS.requirements),
   createRequirement: (payload) => apiRequest(API_CONTRACTS.requirements, { method: 'POST', body: JSON.stringify(payload) }),
   updateRequirement: (id, payload) => apiRequest(API_CONTRACTS.requirementById(id), { method: 'PUT', body: JSON.stringify(payload) }),
+  createEquipment: (payload) => apiRequest(API_CONTRACTS.equipment, { method: 'POST', body: JSON.stringify(payload) }),
   getInstructorAssignments: () => apiRequest(API_CONTRACTS.instructorAssignments),
   assignInstructor: (sectionId, payload) => apiRequest(API_CONTRACTS.sectionInstructors(sectionId), { method: 'POST', body: JSON.stringify(payload) }),
   removeInstructor: (sectionId, staffId) => apiRequest(API_CONTRACTS.sectionInstructorById(sectionId, staffId), { method: 'DELETE' }),

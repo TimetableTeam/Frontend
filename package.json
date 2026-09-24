@@ -1,7 +1,7 @@
 {
   "name": "tanseek-frontend",
   "private": true,
-  "version": "3.5.3",
+  "version": "3.5.7",
   "type": "module",
   "scripts": {
     "dev": "vite",

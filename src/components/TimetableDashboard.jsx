@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import PageHeader from './PageHeader'
 import { Button, Card, StatusBadge } from './UI'
 import { Icon } from './Icons'
-import { days, slots } from '../data/mockData'
+import { days } from '../data/mockData'
 import { useLanguage } from '../i18n/LanguageContext'
 import { hasPermission } from '../auth/permissions'
 import AddAllocationModal from './AddAllocationModal'
 import EditAllocationModal from './EditAllocationModal'
+import { tanseekApi } from '../api/tanseekApi'
 
 function formatPublishedAt(value, language = 'en') {
   if (!value) return ''
@@ -206,7 +207,16 @@ export default function TimetableDashboard({
   const [workflowBusy, setWorkflowBusy] = useState(false)
   const [workflowError, setWorkflowError] = useState('')
   const [workflowMessage, setWorkflowMessage] = useState('')
+  const [slotOptions, setSlotOptions] = useState([])
   const { language, t } = useLanguage()
+
+  useEffect(() => {
+    let active = true
+    tanseekApi.getPlanningCatalog()
+      .then(payload => { if (active) setSlotOptions(payload?.slots || []) })
+      .catch(() => { if (active) setSlotOptions([]) })
+    return () => { active = false }
+  }, [])
 
   const publishedOnly = ['lecturer', 'ta', 'student'].includes(role)
   const canManageDraft = hasPermission(user, 'schedule.manage')
@@ -260,7 +270,7 @@ export default function TimetableDashboard({
   }
 
   function exportTimetable() {
-    const slotMap = new Map(slots.map(slot => [slot.id, slot]))
+    const slotMap = new Map(slotOptions.map(slot => [slot.id, slot]))
     const headers = [t('Course code'), t('Course'), t('Section'), t('Component'), t('Instructor'), t('Room'), t('Day'), t('Start'), t('End'), t('Level')]
     const rows = visible.map(item => {
       const slot = slotMap.get(item.slot)
@@ -483,7 +493,7 @@ export default function TimetableDashboard({
                   <div className="grid grid-cols-[112px_repeat(5,minmax(160px,1fr))] gap-2">
                     <div />
                     {days.map(day => <div key={day} className="px-2 pb-2 text-xs font-bold uppercase tracking-[0.08em] text-tanseek-muted">{t(day)}</div>)}
-                    {slots.flatMap(slot => [
+                    {slotOptions.flatMap(slot => [
                       <div key={`time-${slot.id}`} className="flex min-h-[112px] flex-col justify-start rounded-brand-sm bg-tanseek-canvas px-3 py-3 text-xs"><span className="font-bold text-tanseek-navy">{slot.start}</span><span className="mt-1 text-tanseek-muted">{slot.end}</span></div>,
                       ...days.map(day => {
                         const cellEvents = visible.filter(a => a.day === day && a.slot === slot.id)

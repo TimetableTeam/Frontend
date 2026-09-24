@@ -882,7 +882,23 @@ export async function handleMockRequest(path, options = {}) {
       if (type === 'slots') return jsonClone({ records: planningCatalogs.slots })
     }
     if (method === 'POST') {
-      if (type === 'slots') throw new Error('Time slots are fixed by the current scheduling policy.')
+      if (type === 'slots') {
+        requireRoles(options, ['super_admin'], 'Only Super Admin can manage Time Slots.')
+        const start = String(body.start || '').slice(0, 5)
+        const end = String(body.end || '').slice(0, 5)
+        const toMinutes = value => { const [h, m] = String(value).split(':').map(Number); return h * 60 + m }
+        if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) throw new Error('Start time and end time are required.')
+        if (toMinutes(end) - toMinutes(start) !== 120) throw new Error('Time slots must be exactly 2 hours under the current scheduling policy.')
+        if (toMinutes(start) < 9 * 60 || toMinutes(end) > 17 * 60) throw new Error('Time slots must stay within the current teaching window of 09:00 to 17:00.')
+        const existing = planningCatalogs.slots.find(item => item.start === start && item.end === end)
+        if (existing) return jsonClone(existing)
+        const overlap = planningCatalogs.slots.find(item => toMinutes(item.start) < toMinutes(end) && toMinutes(item.end) > toMinutes(start))
+        if (overlap) throw new Error('This time slot overlaps an existing slot in the active term.')
+        const record = { id: `s${planningCatalogs.slots.length + 1}`, start, end, label: `${start}-${end}` }
+        planningCatalogs.slots = [...planningCatalogs.slots, record].sort((a, b) => a.start.localeCompare(b.start))
+        recordActivity(options, 'Time slot added', `${start}-${end} was added to the active term.`, 'system')
+        return jsonClone(record)
+      }
       const actor = type === 'terms'
         ? requireRoles(options, ['super_admin'], 'Only Super Admin can manage Academic Terms.')
         : requireRoles(options, ['department_coordinator'], 'Only the Department Coordinator can manage Courses and Sections.')

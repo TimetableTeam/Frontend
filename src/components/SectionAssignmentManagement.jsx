@@ -8,6 +8,7 @@ export default function SectionAssignmentManagement({ currentUser }) {
   const { t } = useLanguage()
   const [students, setStudents] = useState([])
   const [catalog, setCatalog] = useState(null)
+  const [activeTermId, setActiveTermId] = useState(null)
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [registrations, setRegistrations] = useState([])
   const [assignments, setAssignments] = useState([])
@@ -51,17 +52,23 @@ export default function SectionAssignmentManagement({ currentUser }) {
     )
   }, [catalog, selectedCourse, form.component])
 
-  async function loadForStudent(studentId) {
+  async function loadForStudent(studentId, termId = activeTermId) {
     if (!studentId) {
       setRegistrations([])
       setAssignments([])
       return
     }
+    if (!termId) {
+      setRegistrations([])
+      setAssignments([])
+      setError(t('No active academic term is available.'))
+      return
+    }
     setError('')
     try {
       const [registrationPayload, assignmentPayload] = await Promise.all([
-        tanseekApi.getStudentCourseRegistrations(studentId, 1),
-        tanseekApi.getStudentSectionEnrollments(studentId, 1),
+        tanseekApi.getStudentCourseRegistrations(studentId, termId),
+        tanseekApi.getStudentSectionEnrollments(studentId, termId),
       ])
       setRegistrations(registrationPayload?.registrations || [])
       setAssignments(assignmentPayload?.assignments || [])
@@ -80,11 +87,13 @@ export default function SectionAssignmentManagement({ currentUser }) {
           tanseekApi.getPlanningCatalog(),
         ])
         const list = studentsPayload?.students || []
+        const termId = Number(catalogPayload?.termId || catalogPayload?.term?.id || 0) || null
         setStudents(list)
         setCatalog(catalogPayload)
+        setActiveTermId(termId)
         const firstId = list[0]?.id || ''
         setSelectedStudentId(firstId)
-        if (firstId) await loadForStudent(firstId)
+        if (firstId) await loadForStudent(firstId, termId)
       } catch (err) {
         setError(err?.message || 'Could not load section assignment data.')
       } finally {
@@ -105,20 +114,20 @@ export default function SectionAssignmentManagement({ currentUser }) {
 
   async function assignSection(event) {
     event.preventDefault()
-    if (!selectedStudentId || !form.course_code || !form.section_code) return
+    if (!selectedStudentId || !activeTermId || !form.course_code || !form.section_code) return
     setSaving(true)
     setError('')
     setMessage('')
     try {
       await tanseekApi.createSectionEnrollment({
         student_id: Number(selectedStudentId),
-        term_id: 1,
+        term_id: activeTermId,
         course_code: form.course_code,
         component: form.component,
         section_code: form.section_code,
       })
       setMessage(t('Section assignment saved.'))
-      await loadForStudent(selectedStudentId)
+      await loadForStudent(selectedStudentId, activeTermId)
     } catch (err) {
       setError(err?.message || 'Could not assign this section.')
     } finally {
@@ -133,7 +142,7 @@ export default function SectionAssignmentManagement({ currentUser }) {
     try {
       await tanseekApi.deleteSectionEnrollment(id)
       setMessage(t('Section assignment removed.'))
-      await loadForStudent(selectedStudentId)
+      await loadForStudent(selectedStudentId, activeTermId)
     } catch (err) {
       setError(err?.message || 'Could not remove this section assignment.')
     }
@@ -146,6 +155,12 @@ export default function SectionAssignmentManagement({ currentUser }) {
         title={t('Student section assignments')}
         description={t('After course registration, assign each student to one Lecture section and one Practical section when the course has both components.')}
       />
+
+      {!loading && !activeTermId && (
+        <div className="mb-5 rounded-brand border border-tanseek-alert/25 bg-tanseek-alertSoft px-4 py-3 text-sm font-bold text-tanseek-alert">
+          {t('No active academic term is available. Activate a term before assigning students to sections.')}
+        </div>
+      )}
 
       {currentUser?.role === 'department_coordinator' && currentUser?.department_name && (
         <div className="mb-5 rounded-brand border border-tanseek-teal/20 bg-tanseek-tealSoft px-4 py-3 text-xs text-tanseek-ink">
@@ -172,7 +187,7 @@ export default function SectionAssignmentManagement({ currentUser }) {
                   const id = event.target.value
                   setSelectedStudentId(id)
                   setForm({ course_code: '', component: 'LECTURE', section_code: '' })
-                  await loadForStudent(id)
+                  await loadForStudent(id, activeTermId)
                 }}
                 className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm"
               >

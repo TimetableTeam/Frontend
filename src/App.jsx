@@ -17,7 +17,7 @@ import InstructorAssignments from './components/InstructorAssignments'
 import AuditLog from './components/AuditLog'
 import ProfileSettings from './components/ProfileSettings'
 import { allocations as initialAllocations, conflicts, slots } from './data/mockData'
-import { authApi, clearAuthSession, loadAuthSession, saveAuthSession } from './api/authApi'
+import { authApi, clearAuthSession, getLastAuthActivity, loadAuthSession, saveAuthSession, SESSION_IDLE_MINUTES, SESSION_IDLE_MS, touchAuthActivity } from './api/authApi'
 import { tanseekApi } from './api/tanseekApi'
 import { USE_MOCK_API } from './api/client'
 import { getAllowedPages, getDefaultPage, hasPermission } from './auth/permissions'
@@ -104,6 +104,7 @@ function backendConflictItems(validation, allocations) {
 export default function App() {
   const initialSession = loadAuthSession()
   const [session, setSession] = useState(initialSession)
+  const [loginNotice, setLoginNotice] = useState('')
   const role = session?.user?.role || null
   const [page, setPage] = useState(() => getDefaultPage(initialSession?.user))
   const [resolvedIds, setResolvedIds] = useState(() => loadResolvedConflictIds())
@@ -125,6 +126,54 @@ export default function App() {
   )
 
   useEffect(() => {
+    if (!session) return undefined
+
+    let lastActivity = getLastAuthActivity() || Date.now()
+    let lastPersisted = lastActivity
+
+    const expireSession = (message) => {
+      clearAuthSession()
+      setSession(null)
+      setPage('overview')
+      setDraftAllocations(cloneAllocations())
+      setDraftValidation(null)
+      setScheduleWorkflow(null)
+      setLoginNotice(message)
+    }
+
+    const markActivity = () => {
+      const now = Date.now()
+      lastActivity = now
+      if (now - lastPersisted >= 15000) {
+        lastPersisted = now
+        touchAuthActivity(now)
+      }
+    }
+
+    const checkIdle = () => {
+      if (Date.now() - lastActivity >= SESSION_IDLE_MS) {
+        expireSession(`Your session ended after ${SESSION_IDLE_MINUTES} minutes of inactivity. Please sign in again.`)
+      }
+    }
+
+    const handleAuthExpired = () => expireSession('Your session expired. Please sign in again.')
+    const activityEvents = ['pointerdown', 'keydown', 'scroll', 'touchstart']
+    activityEvents.forEach(eventName => window.addEventListener(eventName, markActivity, { passive: true }))
+    window.addEventListener('focus', checkIdle)
+    window.addEventListener('tanseek:auth-expired', handleAuthExpired)
+
+    checkIdle()
+    const timer = window.setInterval(checkIdle, 15000)
+
+    return () => {
+      window.clearInterval(timer)
+      activityEvents.forEach(eventName => window.removeEventListener(eventName, markActivity))
+      window.removeEventListener('focus', checkIdle)
+      window.removeEventListener('tanseek:auth-expired', handleAuthExpired)
+    }
+  }, [session?.user?.id])
+
+  useEffect(() => {
     if (!role) return
     const pages = getAllowedPages(session?.user)
     if (page !== 'profile' && !pages.includes(page)) setPage(getDefaultPage(session?.user))
@@ -135,6 +184,12 @@ export default function App() {
     if (getAllowedPages(session.user).includes('timetable')) refreshPublishedTimetable()
     if (!['lecturer', 'ta', 'student'].includes(session.user.role) && getAllowedPages(session.user).includes('timetable')) { refreshDraftAllocations(); refreshScheduleWorkflow(); refreshDraftValidation() }
   }, [session?.user?.id])
+
+  useEffect(() => {
+    if (!session || USE_MOCK_API || page !== 'conflicts') return
+    refreshDraftAllocations()
+    refreshDraftValidation()
+  }, [page, session?.user?.id])
 
   async function refreshDraftAllocations() {
     setDraftLoading(true)
@@ -209,12 +264,14 @@ export default function App() {
     const pages = getAllowedPages(nextSession.user)
     if (pages.length === 0) throw new Error(`This account does not have any frontend permissions.`)
     saveAuthSession(nextSession)
+    setLoginNotice('')
     setSession(nextSession)
     setPage(getDefaultPage(nextSession.user))
   }
 
   function handleLogout() {
     clearAuthSession()
+    setLoginNotice('')
     setSession(null)
     setPage('overview')
     setDraftAllocations(cloneAllocations())
@@ -274,8 +331,14 @@ export default function App() {
         start: alternative.start,
       })
       setDraftAllocations(current => current.map(allocation => String(allocation.id) === String(existing.id) ? savedAllocation : allocation))
+
+      // Force a full server round-trip after applying a recommendation. This
+      // prevents the Conflict Resolution screen from rendering stale validation
+      // state after the allocation has already been persisted.
+      await refreshDraftAllocations()
       await refreshScheduleWorkflow()
-      await refreshDraftValidation()
+      const validation = await tanseekApi.validateDraft(DRAFT_ID)
+      setDraftValidation(validation || null)
       return savedAllocation
     }
 
@@ -323,7 +386,7 @@ export default function App() {
     return published
   }
 
-  if (!session) return <LoginScreen onLogin={handleLogin} />
+  if (!session) return <LoginScreen onLogin={handleLogin} sessionNotice={loginNotice} />
 
   const body = {
     overview: <Overview conflictCount={conflictCount} currentUser={session?.user} />,

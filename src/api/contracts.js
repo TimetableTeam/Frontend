@@ -14,6 +14,7 @@ export const API_CONTRACTS = {
   endAcademicTerm: (id) => `/master-data/terms/${id}/end`,
   requirements: '/requirements',
   requirementById: (id) => `/requirements/${id}`,
+  equipment: '/equipment',
   instructorAssignments: '/instructor-assignments',
   sectionInstructors: (sectionId) => `/sections/${sectionId}/instructors`,
   sectionInstructorById: (sectionId, staffId) => `/sections/${sectionId}/instructors/${staffId}`,

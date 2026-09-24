@@ -19,6 +19,9 @@ export async function apiRequest(path, options = {}) {
   })
 
   const payload = response.status === 204 ? null : await response.json().catch(() => null)
+  if (response.status === 401 && token && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('tanseek:auth-expired'))
+  }
   if (!response.ok || payload?.success === false) {
     const message = payload?.message || payload?.error || `API request failed (${response.status})`
     throw new Error(message)

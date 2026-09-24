@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button } from './UI'
 import { Icon } from './Icons'
-import { days, slots } from '../data/mockData'
+import { days } from '../data/mockData'
 import { tanseekApi } from '../api/tanseekApi'
 import { useLanguage } from '../i18n/LanguageContext'
 
@@ -9,19 +9,27 @@ export default function EditAllocationModal({ allocation, onClose, onSave }) {
   const { t } = useLanguage()
   const [form, setForm] = useState({ day: 'Saturday', slot: 's1', room: '' })
   const [rooms, setRooms] = useState([])
+  const [slotOptions, setSlotOptions] = useState([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const selectedSlot = useMemo(() => slots.find(item => item.id === form.slot), [form.slot])
+  const selectedSlot = useMemo(() => slotOptions.find(item => item.id === form.slot), [slotOptions, form.slot])
 
   useEffect(() => {
     if (!allocation) return
-    setForm({ day: allocation.day, slot: allocation.slot, room: allocation.room })
+    setForm({ day: allocation.day, slot: allocation.slot || '', room: allocation.room })
     setError('')
     setLoading(true)
-    tanseekApi.getRooms()
-      .then(payload => setRooms(Array.isArray(payload) ? payload : payload?.rooms || []))
-      .catch(err => setError(err?.message || t('Could not load rooms and labs.')))
+    Promise.all([tanseekApi.getRooms(), tanseekApi.getPlanningCatalog()])
+      .then(([roomsPayload, catalogPayload]) => {
+        setRooms(Array.isArray(roomsPayload) ? roomsPayload : roomsPayload?.rooms || [])
+        const liveSlots = catalogPayload?.slots || []
+        setSlotOptions(liveSlots)
+        const matching = liveSlots.find(item => item.id === allocation.slot)
+          || liveSlots.find(item => item.start === String(allocation.start || '').slice(0, 5))
+        setForm({ day: allocation.day, slot: matching?.id || liveSlots[0]?.id || '', room: allocation.room })
+      })
+      .catch(err => setError(err?.message || t('Could not load rooms, labs and time slots.')))
       .finally(() => setLoading(false))
   }, [allocation?.id])
 
@@ -31,7 +39,7 @@ export default function EditAllocationModal({ allocation, onClose, onSave }) {
     event.preventDefault()
     setSaving(true); setError('')
     try {
-      await onSave(allocation.id, { ...allocation, ...form })
+      await onSave(allocation.id, { ...allocation, ...form, start: selectedSlot?.start || '', end: selectedSlot?.end || '' })
       onClose()
     } catch (err) {
       setError(err?.message || t('Could not update this session.'))
@@ -52,7 +60,7 @@ export default function EditAllocationModal({ allocation, onClose, onSave }) {
 
         <div className="grid gap-4 p-5 md:grid-cols-2 md:p-6">
           <label><span className="mb-2 block text-xs font-bold text-tanseek-ink">{t('Day')}</span><select value={form.day} onChange={e => setForm(prev => ({ ...prev, day: e.target.value }))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm">{days.map(day => <option key={day} value={day}>{t(day)}</option>)}</select></label>
-          <label><span className="mb-2 block text-xs font-bold text-tanseek-ink">{t('Time slot')}</span><select value={form.slot} onChange={e => setForm(prev => ({ ...prev, slot: e.target.value }))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm">{slots.map(slot => <option key={slot.id} value={slot.id}>{slot.start}–{slot.end}</option>)}</select></label>
+          <label><span className="mb-2 block text-xs font-bold text-tanseek-ink">{t('Time slot')}</span><select disabled={loading || slotOptions.length === 0} value={form.slot} onChange={e => setForm(prev => ({ ...prev, slot: e.target.value }))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm disabled:bg-tanseek-canvas"><option value="">{slotOptions.length === 0 ? t('No time slots configured') : t('Select time slot')}</option>{slotOptions.map(slot => <option key={slot.id} value={slot.id}>{slot.start}–{slot.end}</option>)}</select></label>
           <label className="md:col-span-2"><span className="mb-2 block text-xs font-bold text-tanseek-ink">{t('Room / lab')}</span><select disabled={loading} value={form.room} onChange={e => setForm(prev => ({ ...prev, room: e.target.value }))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm disabled:bg-tanseek-canvas">{rooms.map(room => <option key={room.id} value={room.name}>{room.name} · {room.capacity} · {t(room.type)}</option>)}</select></label>
 
           <div className="md:col-span-2 rounded-brand-sm border border-tanseek-line bg-tanseek-canvas p-4 text-xs leading-5 text-tanseek-muted">

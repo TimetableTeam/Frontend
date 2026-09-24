@@ -22,6 +22,7 @@ const emptyByTab = {
   },
   courses: { code: '', name: '', department: '', contact_hours: 3 },
   sections: { code: '', course_id: '', component: 'LECTURE', size: 0 },
+  slots: { start: '', end: '' },
 }
 
 function Field({ label, children, hint, className = '' }) {
@@ -100,7 +101,7 @@ export default function MasterData({
   }, [catalog, departmentScope])
 
   function openNew() {
-    if (!canAdd) return
+    if (!emptyByTab[tab]) return
     setEditingId(null)
     const next = { ...emptyByTab[tab] }
     if (tab === 'courses' && departmentScope) next.department = departmentScope
@@ -153,7 +154,7 @@ export default function MasterData({
       if (editingId) await tanseekApi.updateMasterData(tab, editingId, payload)
       else await tanseekApi.createMasterData(tab, payload)
       setEditorOpen(false)
-      setMessage(t(editingId ? 'Record updated.' : 'Record created.'))
+      setMessage(t(tab === 'slots' ? 'Time slot added.' : (editingId ? 'Record updated.' : 'Record created.')))
       await load()
     } catch (e2) {
       setError(e2.message || t('Could not save this record.'))
@@ -262,14 +263,17 @@ export default function MasterData({
 
           {tab === 'slots' && (
             <div className="rounded-brand border border-tanseek-line bg-tanseek-canvas px-4 py-3 text-xs leading-5 text-tanseek-muted">
-              <strong className="text-tanseek-navy">{t('Fixed scheduling policy')}</strong> — {t('The MVP uses four fixed two-hour slots from 09:00 to 17:00, Saturday through Wednesday, with no breaks. These slots are read-only in the frontend.')}
+              <strong className="text-tanseek-navy">{t('Time-slot policy')}</strong> — {t('Time slots belong to the active term and apply across Saturday through Wednesday. The Super Admin can add missing two-hour slots here.')}
             </div>
           )}
 
           <Card className="min-w-0 overflow-hidden">
             <div className="flex items-center justify-between border-b border-tanseek-line p-5">
               <div><h2 className="text-lg font-bold text-tanseek-navy">{t(title)}</h2><p className="mt-1 text-xs text-tanseek-muted">{tab === 'terms' ? t('Global academic setup managed by the Super Admin.') : t('Department-scoped academic records used by Requirements and scheduling.')}</p></div>
-              <Button variant="secondary" icon="filter" onClick={() => setFilterOpen(prev => !prev)}>{t('Filter')}</Button>
+              <div className="flex items-center gap-2">
+                {tab === 'slots' && <Button icon="plus" onClick={openNew}>{t('Add time slot')}</Button>}
+                <Button variant="secondary" icon="filter" onClick={() => setFilterOpen(prev => !prev)}>{t('Filter')}</Button>
+              </div>
             </div>
 
             {filterOpen && (
@@ -309,7 +313,7 @@ export default function MasterData({
       {editorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-tanseek-navy/45 p-4" onMouseDown={()=>!saving&&setEditorOpen(false)}>
           <form onSubmit={save} className="custom-scrollbar max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-brand border border-tanseek-line bg-white p-6 shadow-soft" onMouseDown={e=>e.stopPropagation()}>
-            <div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.1em] text-tanseek-teal">{t(editingId ? 'Edit master record' : 'New master record')}</p><h2 className="mt-1 text-xl font-bold text-tanseek-navy">{t(editingId ? 'Edit' : 'Add')} {t(title)}</h2></div><button type="button" onClick={()=>setEditorOpen(false)} className="rounded p-2 text-tanseek-muted hover:bg-tanseek-canvas"><Icon name="x"/></button></div>
+            <div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.1em] text-tanseek-teal">{t(editingId ? 'Edit master record' : 'New master record')}</p><h2 className="mt-1 text-xl font-bold text-tanseek-navy">{t(editingId ? 'Edit' : 'Add')} {t(tab === 'slots' ? 'time slot' : title)}</h2></div><button type="button" onClick={()=>setEditorOpen(false)} className="rounded p-2 text-tanseek-muted hover:bg-tanseek-canvas"><Icon name="x"/></button></div>
 
             {tab === 'terms' && (
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -319,6 +323,21 @@ export default function MasterData({
                 <Field label={t('Status')}><select value={form.status} onChange={e=>setForm(p=>({...p,status:e.target.value}))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm"><option value="Draft">{t('Draft')}</option><option value="Active">{t('Active')}</option></select></Field>
                 <Field className="sm:col-span-2" label={t('Holidays')} hint={t('Enter one holiday date per line or separate dates with commas.')}><textarea rows="4" value={form.holidays_text} onChange={e=>setForm(p=>({...p,holidays_text:e.target.value}))} placeholder={'2027-10-06\n2027-12-25'} className="w-full rounded-brand-sm border border-tanseek-line bg-white px-3 py-2 text-sm"/></Field>
                 <div className="sm:col-span-2 rounded-brand-sm border border-tanseek-line bg-tanseek-canvas p-3 text-xs leading-5 text-tanseek-muted"><strong className="text-tanseek-navy">{t('Fixed policy')}</strong><br/>{t('Saturday')}–{t('Wednesday')} · 09:00–17:00 · 4 × {t('2 hours')} · {t('Breaks')}: {t('none')}</div>
+              </div>
+            )}
+
+
+            {tab === 'slots' && (
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <Field label={t('Start time')} hint={t('The current scheduling policy uses two-hour slots.')}>
+                  <input required type="time" step="60" value={form.start || ''} onChange={e=>setForm(p=>({...p,start:e.target.value}))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm"/>
+                </Field>
+                <Field label={t('End time')}>
+                  <input required type="time" step="60" value={form.end || ''} onChange={e=>setForm(p=>({...p,end:e.target.value}))} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm"/>
+                </Field>
+                <div className="sm:col-span-2 rounded-brand-sm border border-tanseek-teal/20 bg-tanseek-tealSoft p-3 text-xs leading-5 text-tanseek-ink">
+                  <strong>{t('Applies to the active term:')}</strong> {t('The slot is created for Saturday, Sunday, Monday, Tuesday and Wednesday so scheduling, availability and validation all use the same real database slot.')}
+                </div>
               </div>
             )}
 
@@ -341,7 +360,7 @@ export default function MasterData({
               </div>
             )}
 
-            <div className="mt-6 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={()=>setEditorOpen(false)}>{t('Cancel')}</Button><Button type="submit" disabled={saving}>{saving ? t('Saving…') : t('Save record')}</Button></div>
+            <div className="mt-6 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={()=>setEditorOpen(false)}>{t('Cancel')}</Button><Button type="submit" disabled={saving}>{saving ? t('Saving…') : t(tab === 'slots' ? 'Add time slot' : 'Save record')}</Button></div>
           </form>
         </div>
       )}

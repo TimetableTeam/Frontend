@@ -3,6 +3,9 @@ import { API_CONTRACTS } from './contracts.js'
 
 const SESSION_KEY = 'tanseek_session'
 const TOKEN_KEY = 'tanseek_access_token'
+const LAST_ACTIVITY_KEY = 'tanseek_last_activity_at'
+export const SESSION_IDLE_MINUTES = Math.max(1, Number(import.meta.env.VITE_SESSION_IDLE_MINUTES || 30))
+export const SESSION_IDLE_MS = SESSION_IDLE_MINUTES * 60 * 1000
 
 const ROLE_ALIASES = {
   super_admin: 'super_admin',
@@ -77,6 +80,7 @@ export function saveAuthSession(session) {
   localStorage.setItem(SESSION_KEY, JSON.stringify(session))
   if (session?.token) localStorage.setItem(TOKEN_KEY, session.token)
   else localStorage.removeItem(TOKEN_KEY)
+  localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()))
 }
 
 export function loadAuthSession() {
@@ -91,7 +95,17 @@ export function loadAuthSession() {
   }
 }
 
+export function getLastAuthActivity() {
+  const value = Number(localStorage.getItem(LAST_ACTIVITY_KEY) || 0)
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+export function touchAuthActivity(at = Date.now()) {
+  localStorage.setItem(LAST_ACTIVITY_KEY, String(at))
+}
+
 export function clearAuthSession() {
   localStorage.removeItem(SESSION_KEY)
   localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(LAST_ACTIVITY_KEY)
 }

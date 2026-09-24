@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import PageHeader from './PageHeader'
 import { Button, Card, StatusBadge } from './UI'
 import { Icon } from './Icons'
@@ -13,6 +13,20 @@ export default function ConflictResolution({ conflicts, resolvedIds, onResolve, 
   const conflict = unresolved.find(c => c.id === selectedId) || unresolved[0]
   const alternatives = Array.isArray(conflict?.alternatives) ? conflict.alternatives : []
   const { t } = useLanguage()
+
+  useEffect(() => {
+    if (!unresolved.length) {
+      setSelectedId(null)
+      setSelectedAlternative(null)
+      setActionError('')
+      return
+    }
+    if (!unresolved.some(item => item.id === selectedId)) {
+      setSelectedId(unresolved[0].id)
+      setSelectedAlternative(null)
+      setActionError('')
+    }
+  }, [unresolved, selectedId])
 
   async function applySelected() {
     if (!selectedAlternative || applying || !conflict) return
