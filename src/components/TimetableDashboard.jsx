@@ -83,7 +83,7 @@ function PublishedState({ type, message, onRetry }) {
   )
 }
 
-function PublishModal({ mode, conflictCount, allocationCount, publishedVersion, publishing, error, workflowStatus, onClose, onReviewConflicts, onConfirm }) {
+function PublishModal({ mode, conflictCount, allocationCount, publishedVersion, termName, publishing, error, workflowStatus, onClose, onReviewConflicts, onConfirm }) {
   const { language, t } = useLanguage()
   if (!mode) return null
 
@@ -100,7 +100,7 @@ function PublishModal({ mode, conflictCount, allocationCount, publishedVersion, 
               <Icon name={blocked || workflowBlocked ? 'alert' : success ? 'check' : 'calendar'} size={22} />
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-tanseek-muted">Fall 2026</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-tanseek-muted">{termName || t('Current term')}</p>
               <h2 className="mt-1 text-xl font-bold text-tanseek-navy">{blocked ? t('Cannot publish this version') : workflowBlocked ? t('Schedule is not ready to publish') : success ? t('Timetable published') : t('Publish timetable?')}</h2>
             </div>
           </div>
@@ -126,12 +126,12 @@ function PublishModal({ mode, conflictCount, allocationCount, publishedVersion, 
             </>
           ) : success ? (
             <>
-              <p className="text-sm leading-6 text-tanseek-ink">{language === 'ar' ? `تم نشر النسخة ${publishedVersion?.version_number} وأصبحت أحدث جدول رسمي في الوضع التجريبي.` : `Published Version ${publishedVersion?.version_number} is now the latest official timetable in Mock API mode.`}</p>
+              <p className="text-sm leading-6 text-tanseek-ink">{language === 'ar' ? `تم نشر النسخة ${publishedVersion?.version_number} وأصبحت أحدث جدول رسمي.` : `Published Version ${publishedVersion?.version_number} is now the latest official timetable.`}</p>
               <div className="mt-5 grid gap-3 rounded-brand-sm border border-tanseek-teal/20 bg-tanseek-tealSoft/55 p-4 sm:grid-cols-2">
                 <div><p className="text-[11px] font-bold uppercase tracking-[0.1em] text-tanseek-muted">{t('Status')}</p><p className="mt-1 text-sm font-bold text-tanseek-navy">{t('PUBLISHED')}</p></div>
                 <div><p className="text-[11px] font-bold uppercase tracking-[0.1em] text-tanseek-muted">{t('Published')}</p><p className="mt-1 text-sm font-bold text-tanseek-navy">{formatPublishedAt(publishedVersion?.published_at, language)}</p></div>
               </div>
-              <p className="mt-4 text-xs leading-5 text-tanseek-muted">{language === 'ar' ? 'سجّل الدخول بحساب دكتور/معيد للتأكد من ظهور النسخة المنشورة فقط. ويمكن للطلاب رؤيتها من الصفحة الرئيسية بدون تسجيل دخول.' : 'Sign in with the Doctor/TA or Student demo account to verify the published personalized views.'}</p>
+              <p className="mt-4 text-xs leading-5 text-tanseek-muted">{language === 'ar' ? 'يمكن للدكتور والمعيد والطالب رؤية أحدث جدول منشور داخل حساباتهم فقط.' : 'Lecturer, TA and Student accounts can view the latest published timetable from their signed-in workspace.'}</p>
             </>
           ) : (
             <>
@@ -209,6 +209,7 @@ export default function TimetableDashboard({
   const [workflowMessage, setWorkflowMessage] = useState('')
   const [slotOptions, setSlotOptions] = useState([])
   const { language, t } = useLanguage()
+  const termName = publishedVersion?.term_name || workflow?.term_name || workflow?.termName || ''
 
   useEffect(() => {
     let active = true
@@ -280,9 +281,9 @@ export default function TimetableDashboard({
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    const termName = String(publishedVersion?.term_name || 'current-term').replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()
+    const fileTermName = String(termName || 'current-term').replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()
     link.href = url
-    link.download = `tanseek-timetable-${termName || 'current-term'}.csv`
+    link.download = `tanseek-timetable-${fileTermName || 'current-term'}.csv`
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -290,8 +291,8 @@ export default function TimetableDashboard({
   }
 
   const headerEyebrow = publishedOnly
-    ? publishedVersion ? `${publishedVersion.term_name || 'Fall 2026'} · ${t('Published')} v${publishedVersion.version_number}` : `Fall 2026 · ${t('Published timetable')}`
-    : 'Fall 2026 · Draft v3'
+    ? publishedVersion ? `${termName || t('Current term')} · ${t('Published')} v${publishedVersion.version_number}` : `${termName || t('Current term')} · ${t('Published timetable')}`
+    : `${termName || t('Current term')} · ${t('Draft')}`
 
   const title = publishedOnly ? t('My timetable') : t('Weekly timetable')
   const description = publishedOnly
@@ -526,6 +527,7 @@ export default function TimetableDashboard({
         onClose={() => setAddOpen(false)}
         onAdd={onAddAllocation}
         user={user}
+        termName={termName}
       />
 
       <EditAllocationModal allocation={editingAllocation} onClose={() => setEditingAllocation(null)} onSave={onUpdateAllocation} />
@@ -535,6 +537,7 @@ export default function TimetableDashboard({
         conflictCount={conflictCount}
         allocationCount={allocations.length}
         publishedVersion={justPublished || publishedVersion}
+        termName={termName}
         publishing={publishing}
         error={publishError}
         workflowStatus={workflow?.status}

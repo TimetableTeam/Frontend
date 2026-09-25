@@ -45,6 +45,7 @@ export default function InstructorAssignments({ currentUser }) {
     })
   }, [catalog, currentUser])
   const selectedSection = useMemo(() => sectionOptions.find(item => String(item.id) === String(sectionId)) || null, [sectionOptions, sectionId])
+  const selectedRequirementId = selectedSection?.requirement_id ?? selectedSection?.requirementId ?? null
   const eligibleStaff = useMemo(() => {
     const scopedStaff = (!currentUser || currentUser.role === 'super_admin' || currentUser.department_id == null)
       ? staff
@@ -56,12 +57,12 @@ export default function InstructorAssignments({ currentUser }) {
 
   async function assign(event) {
     event.preventDefault()
-    if (!sectionId || !staffId) return
+    if (!sectionId || !staffId || !selectedRequirementId) return
     setSaving(true)
     setError('')
     setMessage('')
     try {
-      await tanseekApi.assignInstructor(sectionId, { staff_id: Number(staffId) })
+      await tanseekApi.assignInstructor(sectionId, { staff_id: Number(staffId), requirement_id: Number(selectedRequirementId) })
       setMessage(t('Instructor assignment saved.'))
       setStaffId('')
       await load()
@@ -125,15 +126,21 @@ export default function InstructorAssignments({ currentUser }) {
                 </select>
               </label>
 
+              {selectedSection && !selectedRequirementId && (
+                <div className="rounded-brand-sm border border-tanseek-alert/25 bg-tanseek-alertSoft px-3 py-2 text-xs font-bold leading-5 text-tanseek-alert">
+                  {t('This section is not linked to a Lecture/Practical requirement. Create the course requirement first, then edit this section and choose its component.')}
+                </div>
+              )}
+
               <label className="block">
                 <span className="mb-2 block text-xs font-bold text-tanseek-ink">{t('Instructor')}</span>
-                <select disabled={!sectionId} value={staffId} onChange={event => setStaffId(event.target.value)} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm disabled:bg-tanseek-canvas">
+                <select disabled={!sectionId || !selectedRequirementId} value={staffId} onChange={event => setStaffId(event.target.value)} className="h-11 w-full rounded-brand-sm border border-tanseek-line bg-white px-3 text-sm disabled:bg-tanseek-canvas">
                   <option value="">{t('Select instructor')}</option>
                   {eligibleStaff.map(person => <option key={person.id} value={person.id}>{person.name} · {t(person.role === 'ta' ? 'TA' : 'Lecturer')}</option>)}
                 </select>
               </label>
 
-              <Button type="submit" className="w-full" disabled={saving || !sectionId || !staffId}>{saving ? t('Saving…') : t('Save assignment')}</Button>
+              <Button type="submit" className="w-full" disabled={saving || !sectionId || !staffId || !selectedRequirementId}>{saving ? t('Saving…') : t('Save assignment')}</Button>
             </form>
           </Card>
 

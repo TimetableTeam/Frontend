@@ -372,10 +372,11 @@ export default function App() {
       throw new Error(`Publication blocked: ${validation?.hard_conflict_count || conflictCount} hard conflict${(validation?.hard_conflict_count || conflictCount) === 1 ? '' : 's'} must be resolved first.`)
     }
 
+    const activeTermName = scheduleWorkflow?.term_name || scheduleWorkflow?.termName || publishedVersion?.term_name || 'Current term'
     const published = await tanseekApi.publishDraft(DRAFT_ID, {
-      term_id: 'fall-2026',
-      term_name: 'Fall 2026',
-      name: `Fall 2026 · Version ${(publishedVersion?.version_number || 0) + 1}`,
+      term_id: scheduleWorkflow?.term_id || scheduleWorkflow?.termId || undefined,
+      term_name: activeTermName,
+      name: `${activeTermName} · Version ${(publishedVersion?.version_number || 0) + 1}`,
       published_by: session?.user?.name || 'Admin',
       resolved_conflict_ids: resolvedIds,
       allocations: draftAllocations,
@@ -444,7 +445,7 @@ export default function App() {
   }[page]
 
   return (
-    <Layout page={page} onPageChange={setPage} session={session} conflictCount={conflictCount} onLogout={handleLogout}>
+    <Layout page={page} onPageChange={setPage} session={session} conflictCount={conflictCount} onLogout={handleLogout} termName={scheduleWorkflow?.term_name || scheduleWorkflow?.termName || publishedVersion?.term_name || ''}>
       {body}
     </Layout>
   )

@@ -57,10 +57,10 @@ export const tanseekApi = {
   getPublishedTimetable: () => apiRequest(API_CONTRACTS.publishedTimetable),
 
   getStudents: () => apiRequest(API_CONTRACTS.students),
-  getStudentCourseRegistrations: (studentId, termId = 1) => apiRequest(API_CONTRACTS.studentCourseRegistrations(studentId, termId)),
+  getStudentCourseRegistrations: (studentId, termId) => apiRequest(API_CONTRACTS.studentCourseRegistrations(studentId, termId)),
   createCourseRegistration: (payload) => apiRequest(API_CONTRACTS.courseRegistrations, { method: 'POST', body: JSON.stringify(payload) }),
   deleteCourseRegistration: (id) => apiRequest(API_CONTRACTS.courseRegistrationById(id), { method: 'DELETE' }),
-  getStudentSectionEnrollments: (studentId, termId = 1) => apiRequest(API_CONTRACTS.studentSectionEnrollments(studentId, termId)),
+  getStudentSectionEnrollments: (studentId, termId) => apiRequest(API_CONTRACTS.studentSectionEnrollments(studentId, termId)),
   createSectionEnrollment: (payload) => apiRequest(API_CONTRACTS.sectionEnrollments, { method: 'POST', body: JSON.stringify(payload) }),
   deleteSectionEnrollment: (id) => apiRequest(API_CONTRACTS.sectionEnrollmentById(id), { method: 'DELETE' }),
 }

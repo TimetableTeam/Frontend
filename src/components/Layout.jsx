@@ -50,7 +50,7 @@ function NavButton({ item, active, conflictCount, onClick, t }) {
   )
 }
 
-export default function Layout({ children, page, onPageChange, session, conflictCount = 0, onLogout }) {
+export default function Layout({ children, page, onPageChange, session, conflictCount = 0, onLogout, termName = '' }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef(null)
@@ -146,7 +146,7 @@ export default function Layout({ children, page, onPageChange, session, conflict
 
         <div className="mt-auto border-t border-white/10 pt-5">
           <p className="text-xs text-white/45">{t('Current term')}</p>
-          <p className="mt-1 text-sm font-bold">Fall 2026</p>
+          <p className="mt-1 text-sm font-bold">{termName || t('No active term')}</p>
           <p className="mt-4 text-xs text-white/45">{t('Scope')}</p>
           <p className="mt-1 truncate text-sm font-bold" title={departmentLabel}>{departmentLabel}</p>
           <div className="mt-4 inline-flex rounded-brand-sm bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.08em] text-white/70">{t(USE_MOCK_API ? 'Mock API' : 'Live API')}</div>

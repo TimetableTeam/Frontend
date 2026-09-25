@@ -8,6 +8,7 @@ export default function EnrollmentManagement() {
   const { t } = useLanguage()
   const [students, setStudents] = useState([])
   const [catalog, setCatalog] = useState(null)
+  const [activeTermId, setActiveTermId] = useState(null)
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [registrations, setRegistrations] = useState([])
   const [loading, setLoading] = useState(true)
@@ -32,11 +33,13 @@ export default function EnrollmentManagement() {
         tanseekApi.getPlanningCatalog(),
       ])
       const list = studentsPayload?.students || []
+      const termId = Number(catalogPayload?.termId || catalogPayload?.term?.id || 0) || null
       setStudents(list)
       setCatalog(catalogPayload)
+      setActiveTermId(termId)
       const firstId = selectedStudentId || list[0]?.id || ''
       setSelectedStudentId(firstId)
-      if (firstId) await loadRegistrations(firstId)
+      if (firstId && termId) await loadRegistrations(firstId, termId)
     } catch (err) {
       setError(err?.message || 'Could not load students and registrations.')
     } finally {
@@ -44,14 +47,14 @@ export default function EnrollmentManagement() {
     }
   }
 
-  async function loadRegistrations(studentId) {
+  async function loadRegistrations(studentId, termId = activeTermId) {
     if (!studentId) {
       setRegistrations([])
       return
     }
     setError('')
     try {
-      const payload = await tanseekApi.getStudentCourseRegistrations(studentId, 1)
+      const payload = await tanseekApi.getStudentCourseRegistrations(studentId, termId)
       setRegistrations(payload?.registrations || [])
     } catch (err) {
       setError(err?.message || 'Could not load course registrations.')
@@ -62,14 +65,14 @@ export default function EnrollmentManagement() {
 
   async function addRegistration(event) {
     event.preventDefault()
-    if (!selectedStudentId || !form.course_code) return
+    if (!selectedStudentId || !activeTermId || !form.course_code) return
     setSaving(true)
     setError('')
     setMessage('')
     try {
       await tanseekApi.createCourseRegistration({
         student_id: Number(selectedStudentId),
-        term_id: 1,
+        term_id: activeTermId,
         course_code: form.course_code,
         registration_type: form.registration_type,
       })
@@ -106,6 +109,7 @@ export default function EnrollmentManagement() {
 
       {error && <div className="mb-5 rounded-brand border border-tanseek-alert/25 bg-tanseek-alertSoft px-4 py-3 text-sm font-bold text-tanseek-alert">{error}</div>}
       {message && <div className="mb-5 rounded-brand border border-tanseek-teal/25 bg-tanseek-tealSoft px-4 py-3 text-sm font-bold text-tanseek-navy">{message}</div>}
+      {!loading && !activeTermId && <div className="mb-5 rounded-brand border border-tanseek-alert/25 bg-tanseek-alertSoft px-4 py-3 text-sm font-bold text-tanseek-alert">{t('No active academic term is available. Activate a term before registering courses.')}</div>}
 
       {loading ? (
         <Card className="p-6 text-sm text-tanseek-muted">{t('Loading course registrations…')}</Card>
@@ -160,7 +164,7 @@ export default function EnrollmentManagement() {
                 </select>
               </label>
 
-              <Button type="submit" icon="plus" disabled={saving || !selectedStudentId || !form.course_code} className="w-full">
+              <Button type="submit" icon="plus" disabled={saving || !activeTermId || !selectedStudentId || !form.course_code} className="w-full">
                 {saving ? t('Saving…') : t('Register course')}
               </Button>
             </form>

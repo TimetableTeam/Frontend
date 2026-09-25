@@ -12,7 +12,7 @@ const initialForm = {
   room: '',
 }
 
-export default function AddAllocationModal({ open, onClose, onAdd, user }) {
+export default function AddAllocationModal({ open, onClose, onAdd, user, termName = '' }) {
   const { t } = useLanguage()
   const [form, setForm] = useState(initialForm)
   const [rooms, setRooms] = useState([])
@@ -111,7 +111,7 @@ export default function AddAllocationModal({ open, onClose, onAdd, user }) {
       <form onSubmit={submit} className="custom-scrollbar max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-brand border border-tanseek-line bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-tanseek-line p-5 md:p-6">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-tanseek-muted">Fall 2026 · Draft</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-tanseek-muted">{termName || t('Current term')} · {t('Draft')}</p>
             <h2 className="mt-1 text-xl font-bold text-tanseek-navy">{t('Add session to draft')}</h2>
             <p className="mt-1 text-xs leading-5 text-tanseek-muted">{t('The Department Coordinator already owns section and instructor assignment. The Scheduler only chooses the time and room.')}</p>
           </div>
